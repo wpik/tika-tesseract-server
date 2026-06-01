@@ -6,10 +6,10 @@ and scanned PDFs out of the box.
 
 Inspired by [tesseract-shadow/tesseract-ocr-re](https://github.com/tesseract-shadow/tesseract-ocr-re).
 
-Built on Ubuntu 18.04 with:
+Built with:
 
-- **Tesseract 4** (all language packs) via the `alex-p/tesseract-ocr` PPA on `amd64`, or the default Ubuntu repository
-  on `arm64`
+- **Tesseract 4** (all language packs) via the `alex-p/tesseract-ocr` PPA on `amd64` (Ubuntu 18.04), or the default
+  repository on `arm64` (Debian Bullseye Slim)
 - **Apache Tika Server** (default: 3.3.1) running on port `9998`
 - **Java 11** (OpenJDK headless)
 - **gosu** for flexible runtime user/group switching
@@ -18,10 +18,10 @@ Built on Ubuntu 18.04 with:
 
 ## Supported Platforms
 
-| Platform      | Tesseract source           |
-|---------------|----------------------------|
-| `linux/amd64` | `alex-p/tesseract-ocr` PPA |
-| `linux/arm64` | Ubuntu default repository  |
+| Platform      | Base image           | Tesseract source           |
+|---------------|----------------------|----------------------------|
+| `linux/amd64` | Ubuntu 18.04         | `alex-p/tesseract-ocr` PPA |
+| `linux/arm64` | Debian Bullseye Slim | Debian default repository  |
 
 ---
 
@@ -36,6 +36,39 @@ Verify Tika is running:
 ```bash
 curl http://localhost:9998/tika
 ```
+
+---
+
+## Tika Configuration
+
+Tika can be customised by mounting a `tika-config.xml` file into the container at `/tika-config.xml`. If the file is
+present at startup, it is automatically passed to Tika — no extra flags needed.
+
+```bash
+docker run -d -p 9998:9998 \
+  -v $(pwd)/tika-config.xml:/tika-config.xml:ro \
+  wpik/tika-tesseract-server
+```
+
+If no file is mounted, Tika starts with its default configuration.
+
+A minimal example `tika-config.xml` to configure OCR language:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<properties>
+    <parsers>
+        <parser class="org.apache.tika.parser.DefaultParser"/>
+    </parsers>
+    <ocr>
+        <params>
+            <param name="language" type="string">eng+pol</param>
+        </params>
+    </ocr>
+</properties>
+```
+
+For all available options see the [Tika configuration documentation](https://tika.apache.org/3.0.0/configuring.html).
 
 ---
 
@@ -142,11 +175,12 @@ Options:
 
 ## Files
 
-| File            | Description                                          |
-|-----------------|------------------------------------------------------|
-| `Dockerfile`    | Combined Tesseract + Tika image definition           |
-| `entrypoint.sh` | Creates user/group at runtime and drops privileges   |
-| `build.sh`      | Helper script to build the image with common options |
+| File              | Description                                                   |
+|-------------------|---------------------------------------------------------------|
+| `Dockerfile`      | Multi-stage, multi-platform Tesseract + Tika image            |
+| `entrypoint.sh`   | Creates user/group at runtime, loads config, drops privileges |
+| `build.sh`        | Helper script to build the image with common options          |
+| `tika-config.xml` | Optional Tika configuration file (mount at runtime)           |
 
 ---
 
@@ -156,7 +190,8 @@ Options:
 2. The entrypoint creates the user and group defined by `TIKA_UID`/`TIKA_GID`/`TIKA_USER`/`TIKA_GROUP` if they don't
    already exist.
 3. Ownership of `/home/work` is updated to that user.
-4. [`gosu`](https://github.com/tianon/gosu) drops privileges and execs the Tika server process as that user — with no
+4. If `/tika-config.xml` is present, it is passed to Tika via `--config`.
+5. [`gosu`](https://github.com/tianon/gosu) drops privileges and execs the Tika server process as that user — with no
    extra shell layer, ensuring correct signal handling and PID 1 behaviour.
 
 ---

@@ -21,5 +21,12 @@ if [ ! -f "${TIKA_JAR}" ]; then
     exit 1
 fi
 
-# Drop privileges and exec Tika
-exec gosu "${TIKA_USER}" java -jar "${TIKA_JAR}" --host=0.0.0.0 --port=9998
+# Build Tika command, optionally with config file
+TIKA_CMD="java -jar ${TIKA_JAR} --host=0.0.0.0 --port=9998"
+
+if [ -f "/tika-config.xml" ]; then
+    echo "Using Tika config: /tika-config.xml"
+    TIKA_CMD="${TIKA_CMD} --config=/tika-config.xml"
+fi
+
+exec gosu "${TIKA_USER}" ${TIKA_CMD}

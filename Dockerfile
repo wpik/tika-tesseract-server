@@ -1,4 +1,17 @@
-FROM ubuntu:18.04
+# Stage 1: download Tika jar
+FROM debian:bookworm-slim AS downloader
+
+ARG TIKA_VERSION=3.3.1
+
+RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN wget -q \
+    https://archive.apache.org/dist/tika/${TIKA_VERSION}/tika-server-standard-${TIKA_VERSION}.jar \
+    -O /tika-server-standard-${TIKA_VERSION}.jar
+
+# Stage 2: final — same base for all platforms
+FROM debian:bookworm-slim
 
 ARG TARGETARCH
 ARG TIKA_VERSION=3.3.1
@@ -6,29 +19,20 @@ ARG TIKA_UID=1000
 ARG TIKA_GID=1000
 ARG TIKA_USER=tika
 ARG TIKA_GROUP=tika
+ARG TESSERACT_LANGS="tesseract-ocr-all"
 
-# Create work directory early so wget has a target
 RUN mkdir -p /home/work
 
-# Install Tesseract:
-#   - amd64: use alex-p PPA for Tesseract 4
-#   - arm64: use default Ubuntu repos
-RUN apt-get update && apt-get install -y software-properties-common ca-certificates wget gosu \
-    && if [ "${TARGETARCH}" = "amd64" ]; then \
-        add-apt-repository -y ppa:alex-p/tesseract-ocr \
-        && apt-get update --allow-releaseinfo-change; \
-    else \
-        apt-get update; \
-    fi \
-    && apt-get install -y tesseract-ocr-all openjdk-11-jre-headless \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        gosu \
+        openjdk-17-jre-headless \
+        tesseract-ocr \
+        ${TESSERACT_LANGS} \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# Download Tika Server
-RUN wget -q \
-    https://archive.apache.org/dist/tika/${TIKA_VERSION}/tika-server-standard-${TIKA_VERSION}.jar \
-    -O /home/work/tika-server-standard-${TIKA_VERSION}.jar
+COPY --from=downloader /tika-server-standard-${TIKA_VERSION}.jar /home/work/
 
-# Bake ARGs into ENV so entrypoint and runtime can reference them
 ENV TIKA_VERSION=${TIKA_VERSION}
 ENV TIKA_UID=${TIKA_UID}
 ENV TIKA_GID=${TIKA_GID}
